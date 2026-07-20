@@ -149,7 +149,12 @@
         <div class="field"><label>Custom Variable</label><select id="f_custom"></select></div>
         <div class="field"><label>Fixture / Event (optional)</label><input id="f_event" placeholder="e.g. NYY vs BOS"></div>
         <div class="field"><label>Stake ($)</label><input type="number" inputmode="decimal" id="f_stake" step="0.01" placeholder="100"></div>
-        <div class="field"><label>Odds (American)</label><input type="number" inputmode="numeric" id="f_odds" step="1" placeholder="-110"></div>
+        <div class="field"><label>Odds (American)</label>
+          <div style="display:flex;gap:8px">
+            <button type="button" id="f_oddsSign" style="flex:0 0 52px;font-size:20px;font-weight:700;padding:0;line-height:1">−</button>
+            <input type="number" inputmode="numeric" id="f_odds" step="1" min="0" placeholder="110" style="flex:1;min-width:0">
+          </div>
+        </div>
         <div class="field"><label>Result</label><select id="f_result"></select></div>
         <div class="field" id="settledWrap" style="display:none"><label>Date Settled</label><input type="date" id="f_settled"></div>
         <div class="field" id="cashoutWrap" style="display:none"><label>Cashout payout ($)</label><input type="number" inputmode="decimal" id="f_cashout" step="0.01"></div>
@@ -295,6 +300,18 @@ const LS_KEY = "bt_data_v1";
 const LS_BACKUP_KEY = "bt_lastBackup";
 let DATA = null;
 let editingId = null;
+let oddsSign = -1;
+
+function setOddsSign(s){
+  oddsSign = s<0 ? -1 : 1;
+  const b=$("#f_oddsSign");
+  b.textContent = oddsSign<0 ? "−" : "+";
+  b.style.color = oddsSign<0 ? "var(--red)" : "var(--green)";
+}
+function getOddsValue(){
+  const v=parseFloat($("#f_odds").value);
+  return isNaN(v) ? NaN : oddsSign*Math.abs(v);
+}
 
 const DEFAULT_DATA = {
   schemaVersion:1, currency:"USD", oddsFormat:"american",
@@ -419,6 +436,7 @@ function resetForm(){
   $("#addTitle").textContent="Add a Bet";
   $("#f_date").value=todayStr();
   $("#f_sel").value=""; $("#f_event").value=""; $("#f_stake").value=""; $("#f_odds").value="";
+  setOddsSign(-1);
   $("#f_notes").value=""; $("#f_live").checked=false; $("#f_bonus").checked=false;
   $("#f_result").value="Pending"; $("#f_custom").value="(none)"; $("#f_cashout").value="";
   $("#f_settled").value=""; $("#settledWrap").style.display="none";
@@ -426,7 +444,7 @@ function resetForm(){
   updatePreview();
 }
 function updatePreview(){
-  const b={stake:$("#f_stake").value,odds:$("#f_odds").value,result:$("#f_result").value,
+  const b={stake:$("#f_stake").value,odds:getOddsValue()||0,result:$("#f_result").value,
     bonus:$("#f_bonus").checked,cashout:$("#f_cashout").value};
   const c=computeBet(b);
   $("#prevRisk").textContent=fmt(c.atRisk);
@@ -441,9 +459,9 @@ function updatePreview(){
 }
 function saveBet(){
   const stake=parseFloat($("#f_stake").value);
-  const odds=parseFloat($("#f_odds").value);
+  const odds=getOddsValue();
   if(isNaN(stake)||stake<=0){ toast("Enter a valid stake"); return; }
-  if(isNaN(odds)){ toast("Enter American odds (e.g. -110)"); return; }
+  if(isNaN(odds)||odds===0){ toast("Enter American odds (e.g. 110, use −/+ toggle)"); return; }
   const cust=$("#f_custom").value;
   const existing = editingId ? DATA.bets.find(x=>x.id===editingId) : null;
   const bet={
@@ -472,7 +490,7 @@ function editBet(id){
   $("#f_date").value=b.date; $("#f_book").value=b.book; $("#f_league").value=b.league;
   $("#f_type").value=b.betType; $("#f_sel").value=b.selection||"";
   $("#f_custom").value=b.custom||"(none)"; $("#f_event").value=b.event||"";
-  $("#f_stake").value=b.stake; $("#f_odds").value=b.odds; $("#f_result").value=b.result;
+  $("#f_stake").value=b.stake; setOddsSign(b.odds<0?-1:1); $("#f_odds").value=Math.abs(b.odds); $("#f_result").value=b.result;
   $("#f_cashout").value=b.cashout||""; $("#f_settled").value=b.settledDate||"";
   $("#f_live").checked=!!b.live; $("#f_bonus").checked=!!b.bonus;
   $("#f_notes").value=b.notes||"";
@@ -895,6 +913,7 @@ $("#btnWipe").onclick=()=>{
   if(!confirm("Are you sure? This cannot be undone unless you have a backup.")) return;
   DATA=clone(DEFAULT_DATA); normalize(); persist(); renderAll(); toast("All data erased");
 };
+$("#f_oddsSign").onclick=()=>{ setOddsSign(-oddsSign); updatePreview(); };
 ["f_stake","f_odds","f_bonus","f_result","f_cashout"].forEach(id=>{
   const el=$("#"+id); el.addEventListener("input",updatePreview); el.addEventListener("change",updatePreview);
 });
